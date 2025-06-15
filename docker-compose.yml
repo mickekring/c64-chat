@@ -1,0 +1,19 @@
+services:
+  c64-chat:
+    build: .
+    container_name: c64-chat
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.c64chat.rule=Host(`c64.labbytan.se`)"
+      - "traefik.http.routers.c64chat.entrypoints=websecure"
+      - "traefik.http.routers.c64chat.tls.certresolver=myresolver"
+      - "traefik.http.services.c64chat.loadbalancer.server.port=5555"
+
+networks:
+  web:
+    external: true
