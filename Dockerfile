@@ -2,7 +2,8 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production
+# Installera ALLA dependencies för att kunna bygga React
+RUN npm install
 COPY . .
 RUN npm run build
 
@@ -12,16 +13,13 @@ WORKDIR /app
 
 # Installera bara produktionsberoenden för servern
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Kopiera byggd React-app från builder
 COPY --from=builder /app/build ./build
 
 # Kopiera server-filen
 COPY server.mjs .
-
-# Skapa .env fil (du kan också montera denna via Portainer)
-# COPY .env .
 
 # Exponera port
 EXPOSE 5555
