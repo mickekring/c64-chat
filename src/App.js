@@ -53,6 +53,27 @@ const askOpenAI = async (history) => {
   }
 };
 
+// Ny funktion för att verifiera lösenord
+const verifyPassword = async (password) => {
+  try {
+    const response = await fetch("/api/verify-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.valid;
+  } catch (error) {
+    console.error("Password verification failed:", error);
+    return false;
+  }
+};
+
 /* Färg per prefix --------------------------------------------------- */
 const getLineColor = (ln, lines, index) => {
   // Om det är en fortsättningsrad (börjar med "  ")
@@ -151,6 +172,8 @@ const App = () => {
   const [chatMode, setChatMode] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [passwordMode, setPasswordMode] = useState(false);
+  const [passwordAttempts, setPasswordAttempts] = useState(0);
   const [messages, setMessages] = useState([
     { role: "system", content: SYSTEM_PROMPT },
   ]);
@@ -237,6 +260,9 @@ const App = () => {
   const handleKeyDown = useCallback((e) => {
     if (isTyping || isLoading) return;
     
+    // Disable history navigation in password mode for security
+    if (passwordMode) return;
+    
     if (e.key === "ArrowUp") {
       e.preventDefault();
       setInput(navigateHistory('up')(historyIndex));
@@ -244,7 +270,7 @@ const App = () => {
       e.preventDefault();
       setInput(navigateHistory('down')(historyIndex));
     }
-  }, [isTyping, isLoading, historyIndex, navigateHistory]);
+  }, [isTyping, isLoading, historyIndex, navigateHistory, passwordMode]);
 
   /* ENTER-HANDLER --------------------------------------------------- */
   const handleCommand = useCallback(async (e) => {
@@ -252,9 +278,47 @@ const App = () => {
 
     const cmd = input.toUpperCase();
     setInput("");
-    addToHistory(cmd);
+    
+    // Don't add passwords to history
+    if (!passwordMode) {
+      addToHistory(cmd);
+    }
 
-    if (!chatMode) {
+    if (passwordMode) {
+      // Handle password input
+      addLine("********"); // Show asterisks instead of actual password
+      setIsLoading(true);
+      
+      const isValid = await verifyPassword(cmd);
+      
+      if (isValid) {
+        addLine("");
+        addLine("PASSWORD ACCEPTED.");
+        setTimeout(() => {
+          addLine("");
+          addLine("C64 CHAT V1.0 - TYPE EXIT TO QUIT");
+          addLine("");
+          setChatMode(true);
+          setPasswordMode(false);
+          setPasswordAttempts(0);
+          setIsLoading(false);
+        }, 1000);
+      } else {
+        setPasswordAttempts(prev => prev + 1);
+        addLine("");
+        
+        if (passwordAttempts >= 2) {
+          addLine("ACCESS DENIED. SYSTEM LOCKED.");
+          addLine("READY.");
+          setPasswordMode(false);
+          setPasswordAttempts(0);
+        } else {
+          addLine("INCORRECT PASSWORD. TRY AGAIN.");
+          addLine("PASSWORD:");
+        }
+        setIsLoading(false);
+      }
+    } else if (!chatMode) {
       addLine(cmd);
 
       if (cmd === "LOAD CHAT") {
@@ -264,9 +328,9 @@ const App = () => {
           addLine("LOADING CHAT PROGRAM...");
           setTimeout(() => {
             addLine("");
-            addLine("C64 CHAT V1.0 - TYPE EXIT TO QUIT");
-            addLine("");
-            setChatMode(true);
+            addLine("AUTHENTICATION REQUIRED");
+            addLine("PASSWORD:");
+            setPasswordMode(true);
             setIsLoading(false);
           }, 1000);
         }, 100);
@@ -327,7 +391,7 @@ const App = () => {
         }
       }
     }
-  }, [input, chatMode, isTyping, isLoading, messages, addLine, simulateTyping, addToHistory]);
+  }, [input, chatMode, passwordMode, passwordAttempts, isTyping, isLoading, messages, addLine, simulateTyping, addToHistory]);
 
   /* STILAR ---------------------------------------------------------- */
   const c64 = {
@@ -380,10 +444,13 @@ const App = () => {
     const prefix = chatMode ? "> " : "";
     const maxChars = chatMode ? 36 : 38;
     
-    if (input.length === 0) return [{ text: prefix, isLast: true }];
+    // In password mode, show asterisks instead of actual input
+    const displayInput = passwordMode ? "*".repeat(input.length) : input.toUpperCase();
+    
+    if (displayInput.length === 0) return [{ text: prefix, isLast: true }];
     
     const lines = [];
-    let remaining = input.toUpperCase(); // Konvertera till CAPS för visning
+    let remaining = displayInput;
     let isFirst = true;
     
     while (remaining.length > 0) {

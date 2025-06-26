@@ -23,6 +23,34 @@ app.use((req, res, next) => {
 });
 
 /* ---------- API -------------------------------------------------- */
+
+// Password verification endpoint
+app.post('/api/verify-password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    
+    // Validera input
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ error: 'Invalid password format' });
+    }
+    
+    // Hämta lösenord från miljövariabel (default: pass123)
+    const correctPassword = process.env.C64_PASSWORD || 'pass123';
+    
+    // Jämför lösenord (case-insensitive för C64-känsla)
+    const isValid = password.toUpperCase() === correctPassword.toUpperCase();
+    
+    // Logga försök (utan att visa lösenordet)
+    console.log(`Password attempt: ${isValid ? 'SUCCESS' : 'FAILED'}`);
+    
+    res.json({ valid: isValid });
+  } catch (err) {
+    console.error('Password verification error:', err);
+    res.status(500).json({ error: 'Password verification failed' });
+  }
+});
+
+// Chat endpoint
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages } = req.body;
@@ -36,7 +64,7 @@ app.post('/api/chat', async (req, res) => {
     const limitedMessages = messages.slice(-20);
     
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1',  // Korrekt modellnamn
+      model: 'gpt-4o-mini',  // Updated to a valid model name
       temperature: 0.8,  // Lite lägre för mer konsistenta svar
       max_tokens: 150,   // Begränsa för C64-stil korta svar
       messages: limitedMessages
@@ -62,7 +90,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    hasApiKey: !!process.env.OPENAI_API_KEY
+    hasApiKey: !!process.env.OPENAI_API_KEY,
+    hasPassword: !!process.env.C64_PASSWORD
   });
 });
 
@@ -83,6 +112,7 @@ const server = app.listen(PORT, () => {
 ║     C64 CHAT SERVER V1.0              ║
 ║     Running on port ${PORT}           ║
 ║     ${new Date().toLocaleString()}    ║
+║     Password: ${process.env.C64_PASSWORD ? 'SET' : 'DEFAULT (pass123)'}   ║
 ╚═══════════════════════════════════════╝
   `);
 });
